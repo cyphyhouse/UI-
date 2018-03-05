@@ -10,7 +10,7 @@ from threading import Thread
 
 
 class MapUI:
-	
+    
     def __init__(self, master):
 
         def center(win):
@@ -65,11 +65,11 @@ class MapUI:
         h = self.map_canvas.winfo_height()
         # Overlay a grid
         for i in range(0,w,SQ_SIZE):
-        	if i != 0:
-				self.map_canvas.create_line(i,0,i,h)
+            if i != 0:
+                self.map_canvas.create_line(i,0,i,h,dash=1)
         for i in range(0,h,SQ_SIZE):
-        	if i != 0:
-        		self.map_canvas.create_line(0,i,w,i)
+            if i != 0:
+                self.map_canvas.create_line(0,i,w,i,dash=1)
 
         # Define UI buttons
         self.add_tasks_flg = IntVar()
@@ -92,8 +92,8 @@ class MapUI:
         file_obj  = open('antenna_locations.txt', 'r')
         anchors = []
         for line in file_obj:
-        	cur_anchors = map(float, line.split())
-        	anchors.append(cur_anchors)
+            cur_anchors = map(float, line.split())
+            anchors.append(cur_anchors)
         file_obj.close()
         anchors = (np.array(anchors)).T
 
@@ -102,15 +102,27 @@ class MapUI:
         largest_x_val = x_vals[np.argmax(abs(x_vals))]
         y_vals = anchors[1]
         largest_y_val = y_vals[np.argmax(abs(y_vals))]
-        self.m_per_pixel_x = float(largest_x_val/(CANVAS_W/2))
-        self.m_per_pixel_y = float(largest_y_val/(CANVAS_H/2))
+
+        if largest_x_val > largest_y_val:
+            largest_y_val = largest_x_val
+        else:
+            largest_x_val = largest_y_val
+
+        global m_per_pixel_x
+        m_per_pixel_x = float(largest_x_val/(CANVAS_W/2))
+        global m_per_pixel_y
+        m_per_pixel_y = float(largest_y_val/(CANVAS_H/2))
 
         # Place antenna (anchors) on UI
         anchors = anchors.T
         for cur_anchor in anchors:
-        	x_pixel_loc = cur_anchor[0] / self.m_per_pixel_x + CANVAS_W/2
-        	y_pixel_loc = cur_anchor[1] / self.m_per_pixel_x + CANVAS_H/2
-        	print(x_pixel_loc, y_pixel_loc)
+            x_pixel_loc = cur_anchor[0] / m_per_pixel_x + CANVAS_W/2
+            y_pixel_loc = -1*(cur_anchor[1] / m_per_pixel_y) + CANVAS_H/2
+
+            # Draw antenna @ location
+            global ANTENNA_LIST
+            antenna_id = self.map_canvas.create_oval(x_pixel_loc-10,y_pixel_loc-10,x_pixel_loc+10,y_pixel_loc+10,fill='red')
+            print(x_pixel_loc, y_pixel_loc)
 
         self.master.update()
 
@@ -124,6 +136,14 @@ class MapUI:
     CANVAS_H = 600
     global TASK_LIST
     TASK_LIST = None
+    global m_per_pixel_x
+    m_per_pixel_x = None
+    global m_per_pixel_y
+    m_per_pixel_y = None
+    global NEW_TASK_FLAG
+    NEW_TASK_FLAG = False
+    global ANTENNA_LIST
+    ANTENNA_LIST = None
 
     
     ui_wp_list = None
@@ -131,8 +151,6 @@ class MapUI:
     add_wp_flag = False
     task_id = 0
     add_tasks_flg = None
-    m_per_pixel_x = None
-    m_per_pixel_y = None
     
 
     def add_tasks(self):
@@ -168,12 +186,12 @@ class MapUI:
         y_pixel = event.y
         # Find out how many pixels from center:
         x_pixel = x_pixel - CANVAS_W/2
-        x_physical = x_pixel*self.m_per_pixel_x
+        x_physical = x_pixel*m_per_pixel_x
 
         #vertical case, note this is flipped
         y_pixel = y_pixel - CANVAS_W/2
         y_pixel = -1*y_pixel
-        y_physical = y_pixel*self.m_per_pixel_y
+        y_physical = y_pixel*m_per_pixel_y
 
         # Indicate waypoint in UI
         element_id = self.map_canvas.create_rectangle(w_start,h_start,w_start+SQ_SIZE,h_start+SQ_SIZE,fill='green')
@@ -186,8 +204,12 @@ class MapUI:
         global TASK_LIST
         if TASK_LIST == None:
             TASK_LIST = [[self.task_id, int(self.num_robots.get()), float(self.e.get()), x_physical, y_physical]]
+            global NEW_TASK_FLAG
+            NEW_TASK_FLAG = True
         else:
             TASK_LIST.append([self.task_id, int(self.num_robots.get()), float(self.e.get()), x_physical, y_physical])
+            global NEW_TASK_FLAG
+            NEW_TASK_FLAG = True
 
         self.map_canvas.config(cursor='arrow')
         self.add_wp_flag = False
@@ -201,109 +223,75 @@ class MapUI:
         self.top.destroy()
 
 
-global prev_x
-prev_x = 0
-global prev_y
-prev_y = 0
+
 global PREV_ROBOT_LOCATION
 PREV_ROBOT_LOCATION = None
 
 def socket_loop():
-	HOST = 'localhost'   # Symbolic name, meaning all available interfaces
-	PORT = 8888 # Arbitrary non-privileged port
-	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-	s.bind((HOST, PORT)) 
-	s.listen(1)
-	conn, addr = s.accept()
-	position = conn.recv(20)
-	position = map(float, position.split())
-	
-	
-	if PREV_ROBOT_LOCATION != None:
-		CANVAS_PTR.delete(PREV_ROBOT_LOCATION)
 
-	global PREV_ROBOT_LOCATION
-	PREV_ROBOT_LOCATION = CANVAS_PTR.create_rectangle(position[0], position[1], position[0]+10, position[1]+10, fill='black')
-	
-	'''
 
-	# Redraw the grid
-	for i in range(0,CANVAS_W,SQ_SIZE):
-		if i != 0:
-			CANVAS_PTR.create_line(i,0,i,CANVAS_H)
-	for i in range(0,CANVAS_H,SQ_SIZE):
-		if i != 0:
-			CANVAS_PTR.create_line(0,i,CANVAS_W,i)
-	# Redraw green squares
-	global TASK_LIST
-	if TASK_LIST != None:
-		for tasks in TASK_LIST:
-			x_pos = tasks[3]
-			y_pos = tasks[4]
-			#CANVAS_PTR.create_rectangle(x_pos,y_pos,x_pos+SQ_SIZE-1,y_pos+SQ_SIZE-1,fill='green',outline='white')
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    ##s = socket.socket()        
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
 
-	'''
-	global prev_x
-	prev_x = position[0]
-	global prev_y
-	prev_y = position[1]
-	#print(position)
-	s.close()
-	root.after(500, socket_loop)
+    # Define the port on which you want to connect
+    port = 12345
+
+
+    '''
+    ### Commented out block to recieve Vicon data for now so UI doesn't ####
+    ### stall when not connected to the Vicon 							####
+
+    s.connect(('192.168.1.15', port))
+
+    # receive data from the Vicon
+    position = s.recv(1024)
+    position = map(float, position.split())
+    position[0] = (position[0]/m_per_pixel_x)+CANVAS_W/2
+    position[1] = -1*((position[1]/m_per_pixel_y))+CANVAS_H/2
+    
+    if PREV_ROBOT_LOCATION != None:
+        CANVAS_PTR.delete(PREV_ROBOT_LOCATION)
+
+    global PREV_ROBOT_LOCATION
+    PREV_ROBOT_LOCATION = CANVAS_PTR.create_oval(position[0]-5, position[1]-5, position[0]+5, position[1]+5, fill='black')
+   
+    s.close()
+    '''
+
+
+    #Send update message with tasks
+    if NEW_TASK_FLAG == True:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)       
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
+        s.connect(('', 12345))
+        new_task = TASK_LIST[len(TASK_LIST)-1]
+        task_string = ['{:.2f}'.format(x) for x in new_task]
+        message = " ".join(task_string)
+        s.send(message.encode())
+        global NEW_TASK_FLAG
+        NEW_TASK_FLAG = False
+        s.close()
+
+    root.after(150, socket_loop)
 
 
 root = Tk()
 my_gui = MapUI(root)
 socket_loop()
 root.mainloop()
-'''
-root.mainloop()
-'''
-'''
-root = Tk()
-root.title("test")
-root.geometry("600x600")
-root.configure(background="grey")
-
-def callback(event):
-    event.widget.focus_set()
-    print "clicked at", event.x, event.y
 
 
-def create_grid(event=None):
-    w = c.winfo_width() # Get current width of canvas
-    h = c.winfo_height() # Get current height of canvas
-    c.delete('grid_line') # Will only remove the grid_line
-
-    # Creates all vertical lines at intevals of 100
-    for i in range(0, w, 10):
-        c.create_line([(i, 0), (i, h)], tag='grid_line')
-
-    # Creates all horizontal lines at intevals of 100
-    for i in range(0, h, 10):
-        c.create_line([(0, i), (w, i)], tag='grid_line')
 
 
-c = Canvas(root, height=1000, width=1000, bg='white')
-c = Canvas(root, height=1000, width=1000, bg='white')
-c.pack(fill=BOTH, expand=True)
 
-c.bind('<Configure>', create_grid)
-c.bind("<Button-1>", callback)
-'''
 
-'''image_pil = Image.open("grid.png")
-w, h = image_pil.size
-resize_factor = w/500
-resize_factor = float(w/500)
-#image_pil = image_pil.resize((w/resize_factor, h/resize_factor))
 
-photo = ImageTk.PhotoImage(image_pil)
-label = Label(root, image=photo)
-label.bind("<Button-1>", callback)
-label.pack()
-'''
+
+
+
+
+
 
 
 
