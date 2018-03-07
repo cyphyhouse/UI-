@@ -264,10 +264,10 @@ def socket_loop():
     # Define the port on which you want to connect
     port = 12345
 
-    '''
+    
     ### Commented out block to recieve Vicon data for now so UI doesn't ####
     ### stall when not connected to the Vicon 							####
-    s.connect(('192.168.1.15', port))
+    s.connect(('', port))
 
     # receive data from the Vicon
     position = s.recv(1024)
@@ -296,7 +296,7 @@ def socket_loop():
         global NEW_TASK_FLAG
         NEW_TASK_FLAG = False
         s.close()
-	'''
+	
     root.after(150, socket_loop)
 
 
