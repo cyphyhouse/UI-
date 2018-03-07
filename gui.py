@@ -1,7 +1,7 @@
 
 
 
-from Tkinter import Tk, Label, Button, Canvas, Radiobutton, Toplevel, OptionMenu, StringVar, Message, Entry, IntVar, Checkbutton
+from Tkinter import Tk, Label, Button, Canvas, Radiobutton, Toplevel, OptionMenu, StringVar, Message, Entry, IntVar, Checkbutton, PhotoImage
 from time import sleep
 import numpy as np
 import socket
@@ -49,13 +49,13 @@ class MapUI:
 
 
         master.title("Map Interface")
-        master.minsize(width=900, height=650)
-        master.maxsize(width=900, height=650)
+        master.minsize(width=1000, height=750)
+        master.maxsize(width=1000, height=750)
         master.config(bg=BKG_COLOUR)
         self.master = master
 
         # Canvas for overlaying map
-        self.map_canvas = Canvas(master, width=CANVAS_W, height=CANVAS_H, bg='snow', highlightthickness=0)
+        self.map_canvas = Canvas(master, width=CANVAS_W, height=CANVAS_H, bg='gray85', highlightthickness=0)
         self.map_canvas.pack(side='right',padx=50)
         self.map_canvas.bind("<Button-1>", callback)
         global CANVAS_PTR
@@ -71,22 +71,35 @@ class MapUI:
             if i != 0:
                 self.map_canvas.create_line(0,i,w,i,dash=1)
 
+
+        # Load in flame icon from flame.gif
+        self.flame_icon = PhotoImage(file="flame.gif")
+        # Load in the drone icon from drone.gif
+        global DRONE_ICON
+        DRONE_ICON = PhotoImage(file="drone.gif")
+
+        buttons_frame = Canvas(master, width=163, height=230, bg=BUTTONS_BKG_COLOUR, highlightthickness=1, highlightbackground='dim grey')
+        buttons_frame.place(x=40,y=200)
+
         # Define UI buttons
         self.add_tasks_flg = IntVar()
-        self.add_tasks_b = Checkbutton(master, text="Add Tasks", variable=self.add_tasks_flg, highlightbackground=BKG_COLOUR, background=BKG_COLOUR)
-        self.add_tasks_b.place(x=77,y=140)
+        self.add_tasks_b = Checkbutton(master, text="Add Tasks", variable=self.add_tasks_flg, highlightbackground=BUTTONS_BKG_COLOUR, background=BUTTONS_BKG_COLOUR)
+        self.add_tasks_b.place(x=77,y=240)
 
-        self.clear_wp_b = Button(master, text='Clear Tasks', command=self.clear_wp, highlightbackground=BKG_COLOUR)
+        self.clear_wp_b = Button(master, text='Clear Tasks', command=self.clear_wp, highlightbackground=BUTTONS_BKG_COLOUR)
         self.clear_wp_b.config(width=10)
-        self.clear_wp_b.place(x=65, y=170)
+        self.clear_wp_b.place(x=65, y=270)
         
+        '''
         self.gen_wp_file_b = Button(master, text='Generate Waypoints File', command=self.gen_wp_file, highlightbackground=BKG_COLOUR)
         self.gen_wp_file_b.config(width=20)
         self.gen_wp_file_b.place(x=20, y=250)
+        '''
 
-        self.run_b = Button(master, text='Run', command=self.run, highlightbackground=BKG_COLOUR)
-        self.run_b.config(width=10, height=10)
-        self.run_b.place(x=65, y=350)
+        self.land_b = Button(master, text='Land', command=self.land, highlightbackground=BUTTONS_BKG_COLOUR)
+        self.land_b.config(width=10)
+        self.land_b.place(x=65, y=350)
+
 
         # Set up coordinate system conversion and display corners of room:
         file_obj  = open('antenna_locations.txt', 'r')
@@ -121,19 +134,21 @@ class MapUI:
 
             # Draw antenna @ location
             global ANTENNA_LIST
-            antenna_id = self.map_canvas.create_oval(x_pixel_loc-10,y_pixel_loc-10,x_pixel_loc+10,y_pixel_loc+10,fill='red')
-            print(x_pixel_loc, y_pixel_loc)
+            antenna_id = self.map_canvas.create_oval(x_pixel_loc-15,y_pixel_loc-15,x_pixel_loc+15,y_pixel_loc+15,fill='red')
+       
 
         self.master.update()
 
     global SQ_SIZE 
     SQ_SIZE = 20
     global BKG_COLOUR
-    BKG_COLOUR = 'light grey'
+    BKG_COLOUR = 'gray95'
+    global BUTTONS_BKG_COLOUR
+    BUTTONS_BKG_COLOUR = 'grey66'
     global CANVAS_W
-    CANVAS_W = 600
+    CANVAS_W = 700
     global CANVAS_H
-    CANVAS_H = 600
+    CANVAS_H = 700
     global TASK_LIST
     TASK_LIST = None
     global m_per_pixel_x
@@ -144,8 +159,11 @@ class MapUI:
     NEW_TASK_FLAG = False
     global ANTENNA_LIST
     ANTENNA_LIST = None
+    global DRONE_ICON 
+    DRONE_ICON = None
 
-    
+
+    flame_icon = None
     ui_wp_list = None
     #task_list = None
     add_wp_flag = False
@@ -161,20 +179,24 @@ class MapUI:
 
 
     def clear_wp(self):
-        print "clear wp"
+        print "clear tasks"
         global TASK_LIST
         TASK_LIST = None
         for element_id in self.ui_wp_list:
             self.map_canvas.delete(element_id[0])
         self.ui_wp_list = None
 
+    '''
     def gen_wp_file(self):
         print "generate wp file"
         # function imp here
+    '''
 
-    def run(self):
-        print "run"
-        # function imp here
+    def land(self):
+        # Send a new task with position (0,0,0) z=0 tells drone to land
+        print("land")
+
+
 
     def enter_task(self, event):
         # Determine square (top left corner coords):
@@ -193,23 +215,28 @@ class MapUI:
         y_pixel = -1*y_pixel
         y_physical = y_pixel*m_per_pixel_y
 
-        # Indicate waypoint in UI
-        element_id = self.map_canvas.create_rectangle(w_start,h_start,w_start+SQ_SIZE,h_start+SQ_SIZE,fill='green')
-        if self.ui_wp_list == None:
-            self.ui_wp_list = [[element_id]]
-        else:
-            self.ui_wp_list.append([element_id])
+        try:
+        	# Add to task list
+	        global TASK_LIST
+	        if TASK_LIST == None:
+	            TASK_LIST = [[self.task_id, int(self.num_robots.get()), float(self.e.get()), x_physical, y_physical]]
+	            global NEW_TASK_FLAG
+	            NEW_TASK_FLAG = True
+	        else:
+	            TASK_LIST.append([self.task_id, int(self.num_robots.get()), float(self.e.get()), x_physical, y_physical])
+	            global NEW_TASK_FLAG
+	            NEW_TASK_FLAG = True
 
-        # Add to task list
-        global TASK_LIST
-        if TASK_LIST == None:
-            TASK_LIST = [[self.task_id, int(self.num_robots.get()), float(self.e.get()), x_physical, y_physical]]
-            global NEW_TASK_FLAG
-            NEW_TASK_FLAG = True
-        else:
-            TASK_LIST.append([self.task_id, int(self.num_robots.get()), float(self.e.get()), x_physical, y_physical])
-            global NEW_TASK_FLAG
-            NEW_TASK_FLAG = True
+	        # Indicate task in UI
+	        element_id = self.map_canvas.create_image(event.x, event.y, image=self.flame_icon)
+	        if self.ui_wp_list == None:
+	            self.ui_wp_list = [[element_id]]
+	        else:
+	            self.ui_wp_list.append([element_id])
+       	except:
+       		print("Invalid Task Entry")
+
+
 
         self.map_canvas.config(cursor='arrow')
         self.add_wp_flag = False
@@ -237,11 +264,9 @@ def socket_loop():
     # Define the port on which you want to connect
     port = 12345
 
-
     '''
     ### Commented out block to recieve Vicon data for now so UI doesn't ####
     ### stall when not connected to the Vicon 							####
-
     s.connect(('192.168.1.15', port))
 
     # receive data from the Vicon
@@ -254,12 +279,11 @@ def socket_loop():
         CANVAS_PTR.delete(PREV_ROBOT_LOCATION)
 
     global PREV_ROBOT_LOCATION
-    PREV_ROBOT_LOCATION = CANVAS_PTR.create_oval(position[0]-5, position[1]-5, position[0]+5, position[1]+5, fill='black')
-   
+    PREV_ROBOT_LOCATION = CANVAS_PTR.create_image(position[0], position[1], image=DRONE_ICON)
+    
     s.close()
-    '''
-
-
+    
+    
     #Send update message with tasks
     if NEW_TASK_FLAG == True:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)       
@@ -272,7 +296,7 @@ def socket_loop():
         global NEW_TASK_FLAG
         NEW_TASK_FLAG = False
         s.close()
-
+	'''
     root.after(150, socket_loop)
 
 
