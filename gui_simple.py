@@ -314,7 +314,7 @@ def socket_loop():
                     if element_id[1] == task_id:
                         MAP_CANVAS.delete(element_id[0])
                         UI_WP_LIST.remove(element_id)
-                        # ADD SOME OTHER SHIT HERE TO REMOVE FROM TASK LIST
+                        # ADD SOME OTHER STUFF HERE TO REMOVE FROM TASK LIST
     '''
 
     '''
