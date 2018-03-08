@@ -36,21 +36,22 @@ class MapUI:
         self.master = master
 
         # Canvas for overlaying map
-        self.map_canvas = Canvas(master, width=CANVAS_W, height=CANVAS_H, bg='gray85', highlightthickness=0)
-        self.map_canvas.pack(side='right',padx=50)
-        self.map_canvas.bind("<Button-1>", callback)
+        global MAP_CANVAS
+        MAP_CANVAS = Canvas(master, width=CANVAS_W, height=CANVAS_H, bg='gray85', highlightthickness=0)
+        MAP_CANVAS.pack(side='right',padx=50)
+        MAP_CANVAS.bind("<Button-1>", callback)
         global CANVAS_PTR
-        CANVAS_PTR = self.map_canvas
+        CANVAS_PTR = MAP_CANVAS
         self.master.update()
-        w = self.map_canvas.winfo_width()
-        h = self.map_canvas.winfo_height()
+        w = MAP_CANVAS.winfo_width()
+        h = MAP_CANVAS.winfo_height()
         # Overlay a grid
         for i in range(0,w,SQ_SIZE):
             if i != 0:
-                self.map_canvas.create_line(i,0,i,h,dash=1)
+                MAP_CANVAS.create_line(i,0,i,h,dash=1)
         for i in range(0,h,SQ_SIZE):
             if i != 0:
-                self.map_canvas.create_line(0,i,w,i,dash=1)
+                MAP_CANVAS.create_line(0,i,w,i,dash=1)
 
 
         # Load in flame icon from flame.gif
@@ -117,7 +118,7 @@ class MapUI:
 
             # Draw antenna @ location
             global ANTENNA_LIST
-            antenna_id = self.map_canvas.create_oval(x_pixel_loc-15,y_pixel_loc-15,x_pixel_loc+15,y_pixel_loc+15,fill='red')
+            antenna_id = MAP_CANVAS.create_oval(x_pixel_loc-15,y_pixel_loc-15,x_pixel_loc+15,y_pixel_loc+15,fill='red')
        
 
         self.master.update()
@@ -144,6 +145,11 @@ class MapUI:
     ANTENNA_LIST = None
     global DRONE_ICON 
     DRONE_ICON = None
+    global UI_WP_LIST
+    UI_WP_LIST = None
+    global MAP_CANVAS
+    MAP_CANVAS = None
+
 
 
     flame_icon = None
@@ -157,16 +163,17 @@ class MapUI:
         print "adding tasks"
         # function imp here
         self.add_wp_flag = True
-        self.map_canvas.config(cursor='pencil')
+        MAP_CANVAS.config(cursor='pencil')
 
 
     def clear_wp(self):
         print "clear tasks"
         global TASK_LIST
         TASK_LIST = None
-        for element_id in self.ui_wp_list:
-            self.map_canvas.delete(element_id[0])
-        self.ui_wp_list = None
+        for element_id in UI_WP_LIST:
+            MAP_CANVAS.delete(element_id[0])
+        global UI_WP_LIST
+        UI_WP_LIST = None
 
     '''
     def gen_wp_file(self):
@@ -198,30 +205,32 @@ class MapUI:
         y_physical = y_pixel*m_per_pixel_y
 
         try:
-        	# Add to task list
-	        global TASK_LIST
-	        if TASK_LIST == None:
-	            TASK_LIST = [[self.task_id, x_physical, y_physical]]
-	            TASK_LIST = [[self.task_id, x_physical, y_physical]]
-	            global NEW_TASK_FLAG
-	            NEW_TASK_FLAG = True
-	        else:
-	            TASK_LIST.append([self.task_id, x_physical, y_physical])
-	            global NEW_TASK_FLAG
-	            NEW_TASK_FLAG = True
+            # Add to task list
+            global TASK_LIST
+            if TASK_LIST == None:
+                TASK_LIST = [[self.task_id, 0, x_physical, y_physical]]
+                TASK_LIST = [[self.task_id, 0, x_physical, y_physical]]
+                global NEW_TASK_FLAG
+                NEW_TASK_FLAG = True
+            else:
+                TASK_LIST.append([self.task_id, 0, x_physical, y_physical])
+                global NEW_TASK_FLAG
+                NEW_TASK_FLAG = True
 
-	        # Indicate task in UI
-	        element_id = self.map_canvas.create_image(event.x, event.y, image=self.flame_icon)
-	        if self.ui_wp_list == None:
-	            self.ui_wp_list = [[element_id]]
-	        else:
-	            self.ui_wp_list.append([element_id])
-       	except:
-       		print("Invalid Task Entry")
+            # Indicate task in UI
+            element_id = MAP_CANVAS.create_image(event.x, event.y, image=self.flame_icon)
+
+            if UI_WP_LIST == None:
+                global UI_WP_LIST
+                UI_WP_LIST = [[element_id,self.task_id]]
+            else:
+                UI_WP_LIST.append([element_id,self.task_id])
+        except:
+            print("Invalid Task Entry")
 
 
 
-        self.map_canvas.config(cursor='arrow')
+        MAP_CANVAS.config(cursor='arrow')
         self.add_wp_flag = False
 
         print(TASK_LIST)
@@ -249,7 +258,7 @@ def socket_loop():
 
     '''
     ### Commented out block to recieve Vicon data for now so UI doesn't ####
-    ### stall when not connected to the Vicon 							####
+    ### stall when not connected to the Vicon                           ####
     s.connect(('192.168.1.15', port))
 
     # receive data from the Vicon
@@ -268,18 +277,47 @@ def socket_loop():
     '''
     
     
-    #Send update message with tasks
+    #Send new task to reciver on drone, the reciever will write to tasks.txt
     if NEW_TASK_FLAG == True:
-    	with open("tasks.txt",'a') as file_obj:
-	    	new_task = TASK_LIST[len(TASK_LIST)-1]
-	        task_string = ['{:.2f}'.format(x) for x in new_task]
-	        message = " ".join(task_string)
-	        message = message + "\n"
-	        file_obj.write(message.encode())
-	    	global NEW_TASK_FLAG
-	    	NEW_TASK_FLAG = False
+        new_task = TASK_LIST[len(TASK_LIST)-1]
+        task_string = ['{:.2f}'.format(x) for x in new_task]
+        message = " ".join(task_string)
+        message = message + "\n"
 
-    	'''
+        #send message to drone to write into text file
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)       
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
+        s.connect(('192.168.254.30', 12345))
+        s.send(message.encode())
+
+        global NEW_TASK_FLAG
+        NEW_TASK_FLAG = False
+        '''
+        with open("tasks.txt",'a') as file_obj:
+            new_task = TASK_LIST[len(TASK_LIST)-1]
+            task_string = ['{:.2f}'.format(x) for x in new_task]
+            message = " ".join(task_string)
+            message = message + "\n"
+            file_obj.write(message.encode())
+            global NEW_TASK_FLAG
+            NEW_TASK_FLAG = False
+        '''
+    '''
+    #Check if any tasks have been done, if so, remove flame icon from screen
+    with open("tasks.txt",'r') as file_obj:
+        for line in file_obj:
+            cur_line = line.split()
+            done_flag = float(cur_line[1])
+            if done_flag == 1.0:
+                task_id = float(cur_line[0])
+                for element_id in UI_WP_LIST:
+                    if element_id[1] == task_id:
+                        MAP_CANVAS.delete(element_id[0])
+                        UI_WP_LIST.remove(element_id)
+                        # ADD SOME OTHER SHIT HERE TO REMOVE FROM TASK LIST
+    '''
+
+    '''
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)       
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
         s.connect(('', 12345))
@@ -290,8 +328,8 @@ def socket_loop():
         global NEW_TASK_FLAG
         NEW_TASK_FLAG = False
         s.close()
-        '''
-	
+    '''
+    
     root.after(150, socket_loop)
 
 
